@@ -1,8 +1,8 @@
-pip install folium
-pip install amplify
-pip install geopandas
-pip install networkx
-pip install osmnx==1.9.4 
-pip install streamlit
-pip install streamlit_folium
-pip install pyngrok
+folium
+amplify
+geopandas
+networkx
+osmnx==1.9.4 
+streamlit
+streamlit_folium
+pyngrok
