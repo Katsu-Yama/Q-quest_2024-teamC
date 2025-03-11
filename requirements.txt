@@ -1,5 +1,5 @@
 folium==0.19.5
-geopandas==.14.4
+geopandas==0.14.4
 osmnx==1.9.4
 networkx==3.3
 pyngrok==7.2.3
