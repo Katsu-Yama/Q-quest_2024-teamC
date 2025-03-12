@@ -6,5 +6,8 @@ pyngrok==7.2.3
 streamlit==1.43.1
 streamlit_folium
 amplify==1.3.1
-
-
+geopy
+pandas
+numpy
+matplotlib
+scikit-learn
