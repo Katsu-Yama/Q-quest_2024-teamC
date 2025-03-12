@@ -1,6 +1,6 @@
 # ディレクトリ設定
-dir_name = "/Q-quest2024/teamC/"
-root_dir = "/content/drive/MyDrive/" + dir_name
+
+root_dir = "./" + dir_name
 
 import folium
 import pandas as pd
@@ -56,7 +56,7 @@ op_data = json.load(jf)
 jf.close()
 
 # 神奈川県_市区町村の行政区域データ読み込み(小田原市のみ抽出)
-geojson_path = root_dir + "N03-20240101_14_GML/N03-20240101_14.geojson"
+geojson_path = root_dir + "N03-20240101_14.geojson"
 administrative_district = gpd.read_file(geojson_path)
 odawara_district = administrative_district[administrative_district["N03_004"]=="小田原市"]
 
