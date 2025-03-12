@@ -1,6 +1,6 @@
 # ディレクトリ設定
 
-root_dir = "./" + dir_name
+root_dir = "./"
 
 import folium
 import pandas as pd
