@@ -31,6 +31,48 @@ from amplify import FixstarsClient
 from amplify import solve
 import copy
 
+st.set_page_config(
+    page_title="小田原市 周辺",
+    page_icon="🗾",
+    layout="wide"
+)
+#########################################
+# streamlit custom css
+#########################################
+st.markdown(
+"""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Sawarabi+Gothic&display=swap');
+    body{
+        font-family: "Sawarabi Gothic", sans-serif;
+        font-style: normal;
+        font-weight: 400;
+    }
+    .Qheader{
+        background:siliver;
+    }
+    .Qtitle{
+        padding-left:1em;
+        padding-right:3em;
+        font-size:4em;
+        font-weight:600;
+        color:darkgray;
+    }
+    .Qsubheader{
+        font-size:2em;
+        font-weight:600;
+        color:gray;
+    }
+    .caption{
+        font-size:1.5em;
+        font-weight:400:
+        color:gray;
+        align:right;
+    }
+</style>
+""",unsafe_allow_html=True
+)
+
 # 色指定
 _colors = [
     "green",
@@ -334,11 +376,7 @@ def sovle_annering(model, client, num_cal, timeout):
 # ここからStreamlit本体
 ########################################
 
-st.set_page_config(
-    page_title="小田原市 周辺",
-    page_icon="🗾",
-    layout="wide"
-)
+st.markdown('<div class="Qheader"><span class="Qtitle">Q-LOGIQ</span> <span class="caption">Quantum Logistics Intelligence & Quality Optimization  created by WINKY Force</span></div>', unsafe_allow_html=True)
 
 gis_st, anr_st = st.columns([2, 1])
 
@@ -382,8 +420,9 @@ all_shelter= df[df['Node'].str.startswith('K')]
 all_transport= df[df['Node'].str.startswith('M')]
 
 with anr_st:
-  anr_st.title('拠点リスト')
-  anr_st.write("開設されている避難所と拠点を選んでください")
+  st.markdown('<div class="Qsubheader">拠点リスト</div>',unsafe_allow_html=True)
+  spinner_container = st.container()
+  st.write("開設されている避難所と配送拠点を選んでください")
   selected_shelter=anr_st.pills("避難所",all_shelter['施設名'].tolist(),selection_mode="multi")
   selected_transport=anr_st.pills("配送拠点",all_transport['施設名'].tolist(),selection_mode="multi")
   st.write("選択完了後、下のボタンを押してください。")
@@ -407,56 +446,59 @@ re_node_list = selected_base['配送拠点'] +selected_base['避難所']
 
 with gis_st:
   if best_tour !=None:
-    st.title('配送最適化-計算結果')
+    st.markdown('<div class="Qsubheader">配送最適化-計算結果</div>',unsafe_allow_html=True)
     selected_base=st.session_state['points']
     plot_select_marker(base_map_copy, df,selected_base)
     #re_node_list = selected_base['配送拠点'] +selected_base['避難所']
     base_map_copy = draw_route(base_map_copy, G, best_tour, path_df, re_node_list)
 
   elif selected_base !=None:
-    st.title('避難所・配送拠点の設置')
+    st.markdown('<div class="Qsubheader">避難所・配送拠点の設置</div>',unsafe_allow_html=True)
     plot_select_marker(base_map_copy, df,selected_base)
   else:
-    st.title('避難所・配送拠点の設置')
+    st.markdown('<div class="Qsubheader">避難所・配送拠点の設置</div>',unsafe_allow_html=True)
 
   folium.LayerControl().add_to(base_map_copy)
   st_folium(base_map_copy, width=GIS_WIDE, height=GIS_HIGHT)
 
 if anr_st.button("最適経路探索開始"):
-    #gis_st.write(f'選択された避難所: {selected_shelter_node}//選択された配送拠点:{selected_transport_node}')
-    if not selected_shelter_node or not selected_transport_node:
-        anr_st.warning("避難所・配送拠点をそれぞれを1つ以上選択してください")
-    else:
-        # ここでアニーリング等を実行
-        #annering_param = set_parameter(np_df, path_df, op_data)
-        annering_param=set_parameter(path_df,selected_base)
-        model, x = set_annering_model(annering_param)
-        loop_max = 20
-        best_tour = None
-        best_obj = None
+    with spinner_container:
+        with st.spinner("処理中です。しばらくお待ちください..."):
+        #gis_st.write(f'選択された避難所: {selected_shelter_node}//選択された配送拠点:{selected_transport_node}')
+            if not selected_shelter_node or not selected_transport_node:
+                anr_st.warning("避難所・配送拠点をそれぞれを1つ以上選択してください")
+            else:
+            # ここでアニーリング等を実行
+            #annering_param = set_parameter(np_df, path_df, op_data)
+                annering_param=set_parameter(path_df,selected_base)
+                model, x = set_annering_model(annering_param)
+                loop_max = 20
+                best_tour = None
+                best_obj = None
 
-        for a in range(loop_max):
-            result = sovle_annering(model, client, 1, 5000)
-            x_values = result.best.values
-            solution = x.evaluate(x_values)
-            sequence = onehot2sequence(solution)
-            candidate_tour = process_sequence(sequence)
-            cost_val = result.solutions[0].objective
+                for a in range(loop_max):
+                    result = sovle_annering(model, client, 1, 5000)
+                    x_values = result.best.values
+                    solution = x.evaluate(x_values)
+                    sequence = onehot2sequence(solution)
+                    candidate_tour = process_sequence(sequence)
+                    cost_val = result.solutions[0].objective
 
             # 条件に応じて更新(ここでは最初の解を使う例)
-            best_tour = candidate_tour
-            best_obj = cost_val
-            break
+                    best_tour = candidate_tour
+                    best_obj = cost_val
+                    break
 
-        best_obj = best_obj / 1000.0  # メートル→キロメートル
-        best_obj = round(best_obj, 1)  # 小数点第1位まで
+                best_obj = best_obj / 1000.0  # メートル→キロメートル
+                best_obj = round(best_obj, 1)  # 小数点第1位まで
 
         # 結果をセッションステートに保存
-        st.session_state["best_tour"] = best_tour
-        st.session_state["best_cost"] = best_obj
-        st.session_state["annering_param"]=annering_param
-        st.session_state['redraw'] = True
-
+                st.session_state["best_tour"] = best_tour
+                st.session_state["best_cost"] = best_obj
+                st.session_state["annering_param"]=annering_param
+                st.session_state['redraw'] = True
+            
+            st.success("処理が完了しました！")
 # ========== 出力 ==========
 if st.session_state['best_tour'] !=None:
   annering_param=st.session_state["annering_param"]
