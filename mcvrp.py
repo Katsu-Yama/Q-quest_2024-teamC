@@ -97,6 +97,7 @@ _colors = [
 #root_dir = "/content/drive/MyDrive/" + dir_name
 root_dir="./"
 
+
 #######################
 #　ファイル指定
 #######################
@@ -105,13 +106,20 @@ node_data =  "kyoten_geocode_Revised.json"
 numOfPeople = "number_of_people.csv"
 #geojson_path = root_dir + "GIS/N03-20240101_14_GML/N03-20240101_14.geojson"
 geojson_path = root_dir + "N03-20240101_14.geojson"
-route_file = "path_list_v2.json"
+route_file = "path_list_v20250317.json"
 Map_Tile='https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png'
+
+if "num_of_people" not in st.session_state:
+   np_df = pd.read_csv(root_dir + numOfPeople,header=None, names=['Node', 'num']) #人数データ
+   st.session_state["num_of_people"] = np_df
+if 'shelter_df' not in st.session_state:
+   st.session_state['shelter_df'] = None
 
 GIS_HIGHT=650
 GIS_WIDE=1000
-GIS_ZOOM=12
+GIS_ZOOM=12.2
 
+FORMAT_HTML ='<div>【{type}】<br/><b>{name}</b><br/>住所:{address}<div>'
 
 ########################################
 # Folium を使う表示系関数
@@ -176,12 +184,14 @@ def plot_select_marker(m, data,op_data):
         else:
           continue
 
+        html =FORMAT_HTML.format( name=row['施設名'],address=row['住所'],type=row['拠点種類'])
+        popup = folium.Popup(html, max_width=300)
         folium.Marker(
             location=[row['緯度'], row['経度']],
-            popup=f"{row['施設名']} / {row['住所']} ({row['拠点種類']})",
+            #popup=f"{row['施設名']} / {row['住所']} ({row['拠点種類']})",
+            popup=popup,
             icon=folium.Icon(color=icol)
         ).add_to(layer)
-
 
 def draw_route(m, G, best_routes, path_df, node_name_list):
     for k, vehicle_route in best_routes.items():
@@ -214,7 +224,7 @@ def draw_route_v2(m, G, best_routes, path_df, node_name_list):
               route_gdf.explore(
                   m=layer,  # folium.FeatureGroupオブジェクトを指定
                   color=_colors[k % len(_colors)],
-                  style_kwds={"weight": 10.0, "opacity": 0.5},
+                  style_kwds={"weight": 3.0, "opacity": 0.5},
               )
     #folium.LayerControl().add_to(m)
     return 
@@ -227,7 +237,6 @@ def get_point_name(data,node):
 def set_map_data():
 
   map_data={}
-
   map_data['node_d']=pd.read_json(root_dir + node_data)    #拠点データ
 
   administrative_district = gpd.read_file(geojson_path)
@@ -244,6 +253,17 @@ def set_map_data():
   map_data['base_map']=disp_odawaraMap(map_data['gep_map'] )
 
   return(map_data)
+
+def change_num_of_people():
+   np_df=st.session_state['num_of_people']
+   shelter_df=st.session_state['shelter_df']
+   
+   for index, row in shelter_df.iterrows():
+        node=row['Node']
+        num=row['num']
+        #np_df.num[np_df.Node==node]=num
+        np_df.loc[np_df.Node==node, 'num'] = num
+   st.session_state['num_of_people']=np_df
 
 ########################################
 # アニーリング周り(以前の関数群)
@@ -296,10 +316,9 @@ def set_distance_matrix(path_df, node_list):
             distance_matrix[i, j] = dis
     return distance_matrix
 
-def set_parameter( path_df, op_data):
+def set_parameter( path_df, op_data,np_df):
     annering_param = {}
-    np_df = pd.read_csv(root_dir + numOfPeople) #人数データ
-
+    
     re_node_list = op_data['配送拠点'] + op_data['避難所']
     distance_matrix = set_distance_matrix(path_df, re_node_list)
 
@@ -311,8 +330,12 @@ def set_parameter( path_df, op_data):
     avg_nbase_per_vehicle = (nbase - n_transport_base) // nvehicle
 
     demand = np.zeros(nbase)
+    shel_data=op_data['避難所']
     for i in range(nbase - n_transport_base - 1):
-        demand[i + n_transport_base] = np_df.iloc[i,1]
+        node=shel_data[i]
+        #demand[i + n_transport_base] = np_df.iloc[i,1]
+        #demand[i + n_transport_base] = np_df[np_df['Node']==node]['num']
+        demand[i + n_transport_base] = np_df.loc[np_df.Node==node, 'num'].iloc[0]
 
     demand_max = np.max(demand)
     demand_mean = np.mean(demand[nvehicle:])
@@ -375,8 +398,8 @@ def sovle_annering(model, client, num_cal, timeout):
 ########################################
 # ここからStreamlit本体
 ########################################
-
-st.markdown('<div class="Qheader"><span class="Qtitle">Q-LOGIQ</span> <span class="caption">Quantum Logistics Intelligence & Quality Optimization  created by WINKY Force</span></div>', unsafe_allow_html=True)
+#st.markdown('<div class="Qheader"><span class="Qtitle">Q-LOGIQ</span> <span class="caption">Quantum Logistics Intelligence & Quality Optimization  created by WINKY Force</span></div>', unsafe_allow_html=True)
+st.markdown('<div class="Qheader"><span class="Qtitle">えるくお</span> <span class="caption">--Emergency Logistics Quantum Optiviser-- Created by WINKY Force</span></div>', unsafe_allow_html=True)
 
 gis_st, anr_st = st.columns([2, 1])
 
@@ -413,7 +436,7 @@ st.session_state['redraw'] = False
 
 best_tour=st.session_state['best_tour']
 selected_base=st.session_state['points']
-
+np_df= st.session_state["num_of_people"]
 
 # すべての拠点のリストを取得
 all_shelter= df[df['Node'].str.startswith('K')]
@@ -455,8 +478,29 @@ with gis_st:
   elif selected_base !=None:
     st.markdown('<div class="Qsubheader">避難所・配送拠点の設置</div>',unsafe_allow_html=True)
     plot_select_marker(base_map_copy, df,selected_base)
+    with st.expander("被災者数と必要物資量"):
+       
+       if st.session_state['shelter_df'] is not None:
+          change_num_of_people()
+
+       np_df = st.session_state['num_of_people']
+       shelter_df=pd.DataFrame( selected_shelter_node,columns=['Node'] )
+       shelter_df['Name']=shelter_df['Node'].apply(lambda x: get_point_name(df,x))
+       shelter_df2 = pd.merge(shelter_df, np_df, on='Node', how='left')
+       shelter_df2['demand']=shelter_df2['num'].apply(lambda x: x*4.0/1000.0)
+       #shelter_df2.columns=['ノード','避難所','避難者数（人）','必要物資量（トン）']
+       st.session_state['shelter_df']=st.data_editor(shelter_df2,
+                                      column_config={
+                                        "Node": {"lable": "ノード", "disabled": True},
+                                        "Name": {"label": "避難所", "disabled": True},
+                                        "num": {"label": "避難者数（人）"},
+                                        "demand": {"label": "必要物資量(トン)", "disabled": True}
+                                        }                      
+        )
+ 
   else:
     st.markdown('<div class="Qsubheader">避難所・配送拠点の設置</div>',unsafe_allow_html=True)
+
 
   folium.LayerControl().add_to(base_map_copy)
   st_folium(base_map_copy, width=GIS_WIDE, height=GIS_HIGHT)
@@ -470,14 +514,14 @@ if anr_st.button("最適経路探索開始"):
             else:
             # ここでアニーリング等を実行
             #annering_param = set_parameter(np_df, path_df, op_data)
-                annering_param=set_parameter(path_df,selected_base)
+                annering_param=set_parameter(path_df,selected_base,np_df)
                 model, x = set_annering_model(annering_param)
                 loop_max = 20
                 best_tour = None
                 best_obj = None
 
                 for a in range(loop_max):
-                    result = sovle_annering(model, client, 1, 5000)
+                    result = sovle_annering(model, client, 1, 10000)
                     x_values = result.best.values
                     solution = x.evaluate(x_values)
                     sequence = onehot2sequence(solution)
@@ -487,7 +531,9 @@ if anr_st.button("最適経路探索開始"):
             # 条件に応じて更新(ここでは最初の解を使う例)
                     best_tour = candidate_tour
                     best_obj = cost_val
-                    break
+
+                    if not any(k in best_tour[k][1:-1] for k in range(annering_param['nvehicle'])):
+                       break
 
                 best_obj = best_obj / 1000.0  # メートル→キロメートル
                 best_obj = round(best_obj, 1)  # 小数点第1位まで
@@ -504,9 +550,16 @@ if st.session_state['best_tour'] !=None:
   annering_param=st.session_state["annering_param"]
   best_obj=st.session_state['best_cost']
   best_tour=st.session_state['best_tour']
-  gis_st.write(f"#### 計算結果: 総距離: {best_obj} km")
+  gis_st.write(f"#### 計算結果")
   distance_matrix=annering_param['distance_matrix']
   demand=annering_param['demand']
+
+  node_no=[]
+  base_list=[]
+  weight_list=[]
+  distance_list=[]
+  node_list=[]
+  weight_all=0
   for item in best_tour.items():
      distance=0
      weight=0
@@ -520,8 +573,31 @@ if st.session_state['best_tour'] !=None:
      
      it=item[1][len(item[1])-1]
      p_node += f'{get_point_name(df,re_node_list[it])}'
-     r_str=f"ルート{item[0]} (走行距離:{distance/1000:.2f}km/配送量:{weight/1000*4:.2f}t)  \n【拠点】{p_node}"
-     gis_st.write(r_str)
+     #r_str=f"ルート{item[0]} (走行距離:{distance/1000:.2f}km/配送量:{weight/1000*4:.2f}t)  \n【拠点】{p_node}"
+     weight_all += weight
+     base_list.append(get_point_name(df,re_node_list[it]))
+     w_str=f'{weight/1000*4:.2f}t'
+     d_str=f'{distance/1000:.2f}km' 
+     node_no.append(item[0])
+     weight_list.append(w_str)
+     distance_list.append(d_str)
+     node_list.append(p_node)
+     #gis_st.write(r_str)
+
+  result_df=pd.DataFrame({"ノードNo.":node_no,"配送拠点":base_list,"必要物資量":weight_list,"走行距離":distance_list,"巡回順":node_list})
+  columnConfig={
+                "ノードNo.": st.column_config.Column(width="small"),
+                "配送拠点":  st.column_config.Column(width='medium'),
+                "必要物資量": st.column_config.Column(width='small'),
+                "走行距離": st.column_config.Column(width='small'),
+                "巡回順": st.column_config.Column(width='large') 
+  }
+  gis_st.dataframe(result_df,
+               column_config = columnConfig
+    )
+  all_str=f'総物資量:{weight_all/1000*4:.2f}t/総距離: {best_obj} km'
+  gis_st.write(all_str)
+
   #best_tour_markdown = "\n".join([f"{key}: {value}" for key, value in best_tour.items()])
   #gis_st.markdown(best_tour_markdown)
 
